@@ -1,4 +1,4 @@
-import { StringUri } from "../interfaces/hostinterface";
+import { StringUri } from "#sl-script-preprocessor";
 
 export class FileLinkIndex<T>
 {

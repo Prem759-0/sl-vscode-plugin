@@ -2,7 +2,7 @@ import * as path from "path";
 import {
     StringUri,
     filePathToStringUri,
-} from "../interfaces/hostinterface";
+} from "#sl-script-preprocessor";
 
 export interface VirtualFileIdentity
 {

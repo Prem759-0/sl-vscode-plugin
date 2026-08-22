@@ -6,7 +6,7 @@ import * as vscode from "vscode";
 import * as path from "path";
 import * as fs from "fs";
 import { SCRIPT_FILE_PATTERN, ConfigService, NOTECARD_FILE_PATTERN } from "./configservice";
-import { ConfigKey } from "./interfaces/configinterface";
+import { ConfigKey, FullConfigInterface } from "./interfaces/configinterface";
 import {
     ViewerEditWSClient,
     CompilationResult,
@@ -48,15 +48,14 @@ import {
     CommandExecuteResponse,
     CommandListResponse,
 } from "#sl-ide-ws-client";
-import { ScriptLanguage, LanguageService } from "./shared/languageservice";
-import { ScriptIdentity, ScriptSync } from "./scriptsync";
+import {LanguageService } from "./shared/languageservice";
+import { buildPreprocessorConfig, ScriptIdentity, ScriptSync } from "./scriptsync";
 import {
     canonicalFileUri,
     virtualIdentityKey,
 } from "./shared/filelinkidentity";
 import { FileLinkIndex } from "./shared/filelinkindex";
-import { getLanguageConfig } from "./shared/lexer";
-import { HostInterface } from "./interfaces/hostinterface";
+import { getLanguageConfig, HostInterface, ScriptLanguage } from "#sl-script-preprocessor";
 import { SyncedFileDecorator } from "./vscode/SyncedFileDecorator";
 import { ObjectContentChangeEvent, ObjectContentService, ObjectTreeChangeEvent } from "#sl-ide-ws-client";
 import { ObjectPinStore } from "./vscode/objectpinstore";
@@ -148,6 +147,7 @@ export class SynchService implements vscode.Disposable {
     private lastActiveChange: number = 0;
     private activeSync: ScriptSync | undefined;
     private host: HostInterface;
+    private config: FullConfigInterface;
     private readonly commandRegistry = new CommandRegistry();
     private initialGenerationDone: boolean = false;
     private pendingLaunchObjectId?: string;
@@ -173,9 +173,10 @@ export class SynchService implements vscode.Disposable {
 
     private disposables: vscode.Disposable[] = [];
 
-    private constructor(context: vscode.ExtensionContext) {
+    private constructor(context: vscode.ExtensionContext, config: FullConfigInterface) {
         this.context = context;
         this.host = new VSCodeHost();
+        this.config = config;
         this.syncedFileDecorator = new SyncedFileDecorator(this);
         this.commandRegistry.register(
             {
@@ -232,7 +233,7 @@ export class SynchService implements vscode.Disposable {
                     "SynchService not initialized. Context is required for first initialization.",
                 );
             }
-            SynchService.instance = new SynchService(context);
+            SynchService.instance = new SynchService(context, ConfigService.getInstance());
         }
         return SynchService.instance;
     }
@@ -430,7 +431,7 @@ export class SynchService implements vscode.Disposable {
             parsed.extension as ScriptLanguage,
         );
 
-        if(!this.host.config.getConfig(ConfigKey.KeepViewerFileOpen, true) && masterFound) {
+        if(!this.config.getConfig(ConfigKey.KeepViewerFileOpen, true) && masterFound) {
             void closeTextDocument(viewerDocument).catch((error) => {
                 logInfo(
                     `Failed to auto-close viewer document ${viewerDocument.uri.fsPath}: ${error instanceof Error ? error.message : String(error)}`,
@@ -804,7 +805,7 @@ export class SynchService implements vscode.Disposable {
         showStatusMessage("Connecting to Second Life viewer...", handshake);
 
         const port = portOverride
-            ?? this.host.config.getConfig<number>(ConfigKey.NetworkWebsocketPort, 9020);
+            ?? this.config.getConfig<number>(ConfigKey.NetworkWebsocketPort, 9020);
         const packageJson = this.context.extension.packageJSON as {
             name?: string;
             version?: string;
@@ -828,7 +829,7 @@ export class SynchService implements vscode.Disposable {
                 }
             },
             disconnectDelayMs: (): number =>
-                this.host.config.getConfig<number>(ConfigKey.NetworkDisconnectDelayMs, 1000),
+                this.config.getConfig<number>(ConfigKey.NetworkDisconnectDelayMs, 1000),
         });
         this.context.subscriptions.push(this.websocket.setup(handlers));
         let connected = await this.websocket.connect();
@@ -1798,7 +1799,7 @@ export class SynchService implements vscode.Disposable {
     ) : Promise<vscode.Uri | null> {
         const config =  ConfigService.getInstance()
 
-        const cmt = getLanguageConfig(script.language,config).lineCommentPrefix;
+        const cmt = getLanguageConfig(script.language,buildPreprocessorConfig(script.language, config)).lineCommentPrefix;
 
         if(cmt.length < 1) return null;
 
