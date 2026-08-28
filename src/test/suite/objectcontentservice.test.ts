@@ -1,13 +1,11 @@
 import * as assert from "assert";
 import {
+    LinkedObject,
     ObjectContentChangeEvent,
     ObjectContentService,
-    ObjectTreeChangeEvent,
-} from "../../vscode/objectcontentservice";
-import {
-    LinkedObject,
     ObjectInventoryItem,
-} from "../../vscode/objectcontentinterfaces";
+    ObjectTreeChangeEvent,
+} from "#sl-ide-ws-client";
 
 const rootId = "11111111-1111-4111-8111-111111111111";
 const childPrimId = "22222222-2222-4222-8222-222222222222";

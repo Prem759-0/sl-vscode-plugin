@@ -20,7 +20,6 @@ import {
     closeTextDocument,
     errorLevelToSeverity,
     VSCodeHost,
-    logInfo,
     logRuntimeInfo,
     logRuntimeError,
     logError,
@@ -29,14 +28,19 @@ import {
     showOutputChannel
 } from "./utils";
 import { ScriptLanguage } from "./shared/languageservice";
-import { CompilationResult, Diagnostic, RuntimeDebug, RuntimeError } from "./viewereditwsclient";
+import {
+    CompilationResult,
+    Diagnostic,
+    ObjectInventoryItem,
+    RuntimeDebug,
+    RuntimeError,
+} from "#sl-ide-ws-client";
 import { resolveUri, StringUri, uriDirname, uriEquals } from "./interfaces/hostinterface";
 import { stringUriToVscodeUri, vscodeUriToStringUri } from "./utils";
 import { SynchService } from "./synchservice";
 import { IncludeInfo } from "./shared/parser";
 import { sha256 } from "js-sha256";
 import { getLanguageConfig, isProccessedLanguage, LanguageLexerConfig } from "./shared/lexer";
-import { ObjectInventoryItem } from "./vscode/objectcontentinterfaces";
 
 
 //====================================================================
