@@ -211,11 +211,11 @@ export class ObjectExplorerWebviewProvider implements vscode.WebviewViewProvider
         });
     }
 
-    private _updateItem(e: { object_id: string; prim_id: string; item_id: string; running: boolean }): void {
+    private _updateItem(e: { object_id: string; prim_id: string; item_id: string; running: boolean; faulted?: boolean }): void {
         if (!this._view) { return; }
         this._view.webview.postMessage({
             type: "updateItem",
-            payload: { object_id: e.object_id, prim_id: e.prim_id, item_id: e.item_id, running: e.running },
+            payload: { object_id: e.object_id, prim_id: e.prim_id, item_id: e.item_id, running: e.running, faulted: e.faulted },
         });
     }
 
