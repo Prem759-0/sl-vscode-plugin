@@ -115,7 +115,9 @@ export class ObjectContentDecorator implements FileDecorationProvider, Disposabl
             filename = decodeURIComponent(parts[2]);
         }
 
-        const item = this.contentService.getItemByDisplayName(root_id, prim_id, filename);
+        const item =
+            this.contentService.getItem(root_id, prim_id, filename) ??
+            this.contentService.getItemByDisplayName(root_id, prim_id, filename);
         if (!item || item.type !== "script") {
             return undefined; // Not a script, no decoration
         }
