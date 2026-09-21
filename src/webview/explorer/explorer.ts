@@ -420,12 +420,12 @@ function renderTree(): void {
 function updateItemRunningState(item_id: string, running: boolean, faulted?: boolean): void {
     // Update internal state so it survives re-renders
     for (const obj of state.objects) {
-        const patch = (inv: InventoryItem[]) => { 
-            const i = inv.find((x) => x.item_id === item_id); 
-            if (i) { 
-                i.running = running; 
+        const patch = (inv: InventoryItem[]) => {
+            const i = inv.find((x) => x.item_id === item_id);
+            if (i) {
+                i.running = running;
                 if (faulted !== undefined) { i.faulted = faulted; }
-            } 
+            }
         };
         patch(obj.inventory);
         for (const lo of obj.linked_objects ?? []) { patch(lo.inventory); }
