@@ -214,7 +214,6 @@ export class LexingPreprocessor {
             };
 
         } catch (error) {
-            console.error("PREPROC CATCH",error);
             return {
                 content: source,
                 success: false,
