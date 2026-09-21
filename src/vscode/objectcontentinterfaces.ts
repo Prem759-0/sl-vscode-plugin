@@ -120,7 +120,7 @@ export interface InventoryChanges {
     removed?: string[];                                           // item_ids
     modified?: ObjectInventoryItem[];                            // metadata changes
     content_changed?: string[];                                  // item_ids (invalidates cache)
-    running_changed?: { item_id: string; running: boolean }[];
+    running_changed?: { item_id: string; running: boolean; faulted?: boolean }[];
 }
 
 /** Delta changes for linked objects */

@@ -22,9 +22,17 @@ import { displayName, itemUri } from "./objectcontentprovider";
 // ============================================
 
 /** Fired when objects are added, removed, or have metadata/inventory changes */
+export interface RemovedObjectItem
+{
+    prim_id: string;
+    item_id: string;
+}
+
 export interface ObjectTreeChangeEvent {
     type: "added" | "removed" | "updated";
     object_id: string;
+    /** Inventory items removed from the object during an update */
+    removed_items?: RemovedObjectItem[];
     /** link_ids of prims newly added to the linkset (only set when type === "updated") */
     added_link_ids?: string[];
     /** link_ids of prims removed from the linkset (only set when type === "updated") */
@@ -44,6 +52,7 @@ export interface ScriptRunningChangeEvent {
     prim_id: string;
     item_id: string;
     running: boolean;
+    faulted?: boolean;
 }
 
 /** Fired when a script's VM assignment changes locally */
@@ -130,17 +139,18 @@ export class ObjectContentService implements vscode.Disposable {
 
         let added_link_ids: string[] | undefined;
         let removed_link_ids: string[] | undefined;
+        const removed_items: RemovedObjectItem[] = [];
 
         if (msg.changes) {
             // Delta update
             if (msg.changes.inventory) {
-                this._applyInventoryChanges(
+                removed_items.push(...this._applyInventoryChanges(
                     entry,
                     msg.object_id,
                     msg.object_id,
                     entry.object.inventory,
                     msg.changes.inventory
-                );
+                ));
             }
             if (msg.changes.linked_objects) {
                 const lc = msg.changes.linked_objects;
@@ -173,18 +183,29 @@ export class ObjectContentService implements vscode.Disposable {
                             // The viewer may send either a full inventory array or delta changes.
                             // Detect which format by checking if it's an array.
                             if (Array.isArray(mod.inventory)) {
+                                const newItemIds = new Set(
+                                    mod.inventory.map((item) => item.item_id),
+                                );
+                                for (const item of lo.inventory) {
+                                    if (!newItemIds.has(item.item_id)) {
+                                        removed_items.push({
+                                            prim_id: mod.link_id,
+                                            item_id: item.item_id,
+                                        });
+                                    }
+                                }
                                 // Full replacement — evict cache and replace inventory
                                 this._evictPrimCache(entry, msg.object_id, mod.link_id);
                                 lo.inventory = mod.inventory;
                             } else {
                                 // Delta changes — apply incremental updates
-                                this._applyInventoryChanges(
+                                removed_items.push(...this._applyInventoryChanges(
                                     entry,
                                     msg.object_id,
                                     mod.link_id,
                                     lo.inventory,
                                     mod.inventory
-                                );
+                                ));
                             }
                         }
                     }
@@ -193,6 +214,17 @@ export class ObjectContentService implements vscode.Disposable {
         } else {
             // Full replacement
             if (msg.inventory !== undefined) {
+                const newItemIds = new Set(
+                    msg.inventory.map((item) => item.item_id),
+                );
+                for (const item of entry.object.inventory) {
+                    if (!newItemIds.has(item.item_id)) {
+                        removed_items.push({
+                            prim_id: msg.object_id,
+                            item_id: item.item_id,
+                        });
+                    }
+                }
                 entry.object.inventory = msg.inventory;
                 // Evict root prim content cache entirely
                 this._evictPrimCache(entry, msg.object_id, msg.object_id);
@@ -204,6 +236,32 @@ export class ObjectContentService implements vscode.Disposable {
                 removed_link_ids = oldLinks
                     .filter((lo) => !newIdSet.has(lo.link_id))
                     .map((lo) => lo.link_id);
+                for (const oldLink of oldLinks) {
+                    const newLink = msg.linked_objects.find(
+                        (lo) => lo.link_id === oldLink.link_id,
+                    );
+                    if (!newLink) {
+                        for (const item of oldLink.inventory) {
+                            removed_items.push({
+                                prim_id: oldLink.link_id,
+                                item_id: item.item_id,
+                            });
+                        }
+                        continue;
+                    }
+
+                    const newItemIds = new Set(
+                        newLink.inventory.map((item) => item.item_id),
+                    );
+                    for (const item of oldLink.inventory) {
+                        if (!newItemIds.has(item.item_id)) {
+                            removed_items.push({
+                                prim_id: oldLink.link_id,
+                                item_id: item.item_id,
+                            });
+                        }
+                    }
+                }
                 added_link_ids = msg.linked_objects
                     .filter((lo) => !oldIdSet.has(lo.link_id))
                     .map((lo) => lo.link_id);
@@ -215,7 +273,13 @@ export class ObjectContentService implements vscode.Disposable {
             }
         }
 
-        this._onDidChangeObjects.fire({ type: "updated", object_id: msg.object_id, added_link_ids, removed_link_ids });
+        this._onDidChangeObjects.fire({
+            type: "updated",
+            object_id: msg.object_id,
+            added_link_ids,
+            removed_link_ids,
+            removed_items: removed_items.length > 0 ? removed_items : undefined,
+        });
     }
 
     // ============================================
@@ -424,7 +488,7 @@ export class ObjectContentService implements vscode.Disposable {
         if (!parents || parents.length < 1) return undefined;
         const root = parents[0];
         const prim = parents.length > 1 ? parents[1] : root;
-        return itemUri(root, prim, displayName(item));
+        return itemUri(root, prim, item.item_id);
     }
 
     // ============================================
@@ -445,8 +509,8 @@ export class ObjectContentService implements vscode.Disposable {
     // ============================================
 
     /**
-     * Apply delta inventory changes to an item list.
-     * Fires onDidChangeContent for any content_changed or removed items.
+    * Apply delta inventory changes to an item list.
+    * Returns the stable identities of removed items.
      */
     private _applyInventoryChanges(
         entry: ObjectEntry,
@@ -454,7 +518,9 @@ export class ObjectContentService implements vscode.Disposable {
         prim_id: string,
         inventory: ObjectInventoryItem[],
         changes: InventoryChanges
-    ): void {
+    ): RemovedObjectItem[] {
+        const removed_items: RemovedObjectItem[] = [];
+
         if (changes.added) {
             inventory.push(...changes.added);
         }
@@ -467,7 +533,7 @@ export class ObjectContentService implements vscode.Disposable {
             }
             for (const item_id of changes.removed) {
                 entry.contentCache.delete(item_id);
-                this._onDidChangeContent.fire({ object_id, prim_id, item_id });
+                removed_items.push({ prim_id, item_id });
             }
         }
         if (changes.modified) {
@@ -489,10 +555,15 @@ export class ObjectContentService implements vscode.Disposable {
                 const item = inventory.find((i) => i.item_id === rc.item_id);
                 if (item) {
                     item.running = rc.running;
-                    this._onDidChangeRunningState.fire({ object_id, prim_id, item_id: rc.item_id, running: rc.running });
+                    if (rc.faulted !== undefined) {
+                        item.faulted = rc.faulted;
+                    }
+                    this._onDidChangeRunningState.fire({ object_id, prim_id, item_id: rc.item_id, running: rc.running, faulted: rc.faulted });
                 }
             }
         }
+
+        return removed_items;
     }
 
     /**
