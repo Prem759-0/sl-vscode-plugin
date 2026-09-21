@@ -325,15 +325,6 @@ export function activate(context: vscode.ExtensionContext): void {
     // Set initial connection state
     vscode.commands.executeCommand("setContext", "slVscodeEdit:connected", synchService.isConnected());
 
-    // Clean up syncs when objects are unpublished
-    context.subscriptions.push(
-        objectContentService.onDidChangeObjects(({ type, object_id }) => {
-            if (type === "removed") {
-                synchService.evictSlSyncs(object_id);
-            }
-        })
-    );
-
     // Register URI handler so the viewer can launch VS Code and trigger a connection.
     // URI format: vscode://lindenlab.sl-vscode-plugin/connect?port=9020[&object=<uuid>][&script=<uuid>]
     context.subscriptions.push(

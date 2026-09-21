@@ -280,7 +280,7 @@ export class ObjectExplorerProvider implements vscode.TreeDataProvider<ExplorerN
             object_id,
             prim_id,
             item,
-            uri: itemUri(object_id, prim_id, displayName(item)),
+            uri: itemUri(object_id, prim_id, item.item_id),
         };
     }
 

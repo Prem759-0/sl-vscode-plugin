@@ -46,9 +46,17 @@ export interface ScriptIdentity {
     itemId: string;
 }
 
+export interface TrackedFileSnapshot
+{
+    kind: "local" | "virtual";
+    fileUri?: vscode.Uri;
+    identity?: ScriptIdentity;
+}
+
 interface TrackedLocalFile {
     kind: 'local';
     id: string;
+    fileUri: vscode.Uri;
     viewerDocument: vscode.TextDocument;
     identity?: ScriptIdentity;
     watcher?: vscode.FileSystemWatcher;
@@ -147,11 +155,16 @@ export class ScriptSync implements vscode.Disposable {
             return false;
         }
 
-        let mapping: TrackedLocalFile = { kind: 'local', id, viewerDocument };
+        let mapping: TrackedLocalFile = {
+            kind: 'local',
+            id,
+            fileUri: viewerDocument.uri,
+            viewerDocument,
+        };
 
         mapping.watcher = createFileWatcher(viewerDocument);
         mapping.watcher.onDidDelete((e) => {
-            this.unsubscribeByFile(e.fsPath, true);
+            this.syncService.detachTemporaryFile(e.fsPath, true);
         });
 
         this.fileMappings.push(mapping);
@@ -230,27 +243,66 @@ export class ScriptSync implements vscode.Disposable {
         return this.fileMappings.length;
     }
 
-    public unsubscribeVirtualByUri(uri: vscode.Uri, close?: boolean): void {
-        this.unsubscribeById(uri.toString(), close);
+    public async renameTemporaryFile(
+        oldUri: vscode.Uri,
+        newUri: vscode.Uri,
+    ): Promise<boolean>
+    {
+        const mapping = this.fileMappings.find(
+            (candidate): candidate is TrackedLocalFile =>
+                candidate.kind === "local" &&
+                candidate.fileUri.toString() === oldUri.toString(),
+        );
+        if (!mapping) {
+            return false;
+        }
+
+        const renamedDocument = await vscode.workspace.openTextDocument(newUri);
+        mapping.watcher?.dispose();
+        mapping.fileUri = newUri;
+        mapping.viewerDocument = renamedDocument;
+        mapping.watcher = createFileWatcher(renamedDocument);
+        mapping.watcher.onDidDelete((event) => {
+            this.syncService.detachTemporaryFile(event.fsPath, true);
+        });
+        return true;
     }
 
-    public updateVirtualItem(uri: vscode.Uri, item: ObjectInventoryItem): void {
+    public unsubscribeVirtualMappingByIdentity(identity: ScriptIdentity): void
+    {
+        const virtualIds = this.fileMappings
+            .filter(
+                (mapping): mapping is TrackedVirtualFile =>
+                    mapping.kind === "virtual" &&
+                    mapping.identity.rootId === identity.rootId &&
+                    mapping.identity.primId === identity.primId &&
+                    mapping.identity.itemId === identity.itemId,
+            )
+            .map((mapping) => mapping.id);
+        for (const id of virtualIds) {
+            this.unsubscribeById(id);
+        }
+    }
+
+    public updateVirtualItem(
+        uri: vscode.Uri,
+        identity: ScriptIdentity,
+        item: ObjectInventoryItem,
+    ): void {
         const original = this.fileMappings.find(
             (m): m is TrackedVirtualFile =>
-                m.kind === 'virtual' && m.item?.item_id === item.item_id,
+                m.kind === 'virtual' &&
+                m.identity.rootId === identity.rootId &&
+                m.identity.primId === identity.primId &&
+                m.identity.itemId === identity.itemId,
         );
-        if(!original) return;
-        const mapping = this.unsubscribeInternal(original.id);
-        if(!mapping) return;
-        this.subscribeVirtual(uri, undefined, original.identity, item);
-    }
+        if (!original) {
+            return;
+        }
 
-    public evictVirtualMappingsForObject(object_id: string): void {
-        const prefix = `/${object_id}/`;
-        this.fileMappings = this.fileMappings.filter(
-            (m) => m.kind !== 'virtual' ||
-                   (!m.uri.path.startsWith(prefix) && m.uri.path !== `/${object_id}`)
-        );
+        original.uri = uri;
+        original.id = uri.toString();
+        original.item = item;
     }
 
     //#endregion
@@ -261,11 +313,10 @@ export class ScriptSync implements vscode.Disposable {
     }
 
     public isTrackingFile(viewerFile: string): boolean {
-        // TODO: revisit use of fileName for comparison — for remote/virtual workspace
-        // support this should use viewerDocument.uri.toString() instead.
         return this.fileMappings.some(
             (m): m is TrackedLocalFile =>
-                m.kind === 'local' && m.viewerDocument.fileName === viewerFile,
+                m.kind === 'local' &&
+                m.fileUri.fsPath === path.normalize(viewerFile),
         );
     }
 
@@ -277,24 +328,19 @@ export class ScriptSync implements vscode.Disposable {
         );
     }
 
-    public isTrackingVirtualItem(item: ObjectInventoryItem): boolean {
-        return this.fileMappings.some(
-            (m): m is TrackedVirtualFile =>
-                m.kind === 'virtual' && m.item?.item_id === item.item_id,
-        );
-    }
-
     public isTrackingVirtualItemInObject(object_id: string) : boolean {
         return this.fileMappings.some(
             (m): m is TrackedVirtualFile =>
-                m.kind === "virtual" && m.id.includes(object_id)
+                m.kind === "virtual" &&
+                m.identity.rootId === object_id
         );
     }
 
     public getTrackedVirtualItemsInObject(object_id: string) : TrackedVirtualFile[] {
         return this.fileMappings.filter(
             (m): m is TrackedVirtualFile =>
-                m.kind === "virtual" && m.id.includes(object_id)
+                m.kind === "virtual" &&
+                m.identity.rootId === object_id
         )
     }
 
@@ -325,6 +371,11 @@ export class ScriptSync implements vscode.Disposable {
         return this.masterDocument.uri;
     }
 
+    public renameMasterDocument(document: vscode.TextDocument): void
+    {
+        this.masterDocument = document;
+    }
+
     public getLanguage(): string {
         return this.language;
     }
@@ -335,6 +386,24 @@ export class ScriptSync implements vscode.Disposable {
         return this.fileMappings
             .filter((m): m is TrackedLocalFile => m.kind === 'local')
             .map((m) => m.id);
+    }
+
+    public getTrackedFileSnapshots(): TrackedFileSnapshot[]
+    {
+        return this.fileMappings.map((mapping) => {
+            if (mapping.kind === "local") {
+                return {
+                    kind: "local",
+                    fileUri: mapping.fileUri,
+                };
+            }
+
+            return {
+                kind: "virtual",
+                fileUri: mapping.uri,
+                identity: mapping.identity,
+            };
+        });
     }
     //#endregion
 
@@ -720,6 +789,7 @@ export class ScriptSync implements vscode.Disposable {
         try {
             // Read the original content
             const masterFilePath: string = this.getMasterFilePath();
+            await this.syncService.validateMasterUri(this.masterDocument.uri);
 
             const originalContent = await fs.promises.readFile(
                 masterFilePath,
