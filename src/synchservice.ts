@@ -1416,6 +1416,43 @@ export class SynchService implements vscode.Disposable {
         return null;
     }
 
+    public static stripEmittedMeta(content: string, language: ScriptLanguage): string {
+        const config = ConfigService.getInstance();
+        const cmt = getLanguageConfig(language, config).lineCommentPrefix;
+
+        if (cmt.length < 1) return content;
+
+        const startPrefix = `${cmt} ================ sl-vscode-plugin meta ================`;
+        const endPrefix = `${cmt} =======================================================`;
+
+        const lines = content.split("\n");
+        let startIndex = -1;
+        let endIndex = -1;
+
+        for (let i = 0; i < Math.min(10, lines.length); i++) {
+            if (lines[i].trim() === startPrefix) {
+                startIndex = i;
+                break;
+            }
+        }
+
+        if (startIndex !== -1) {
+            for (let i = startIndex + 1; i < Math.min(startIndex + 15, lines.length); i++) {
+                if (lines[i].trim() === endPrefix) {
+                    endIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (startIndex !== -1 && endIndex !== -1) {
+            lines.splice(startIndex, endIndex - startIndex + 1);
+            return lines.join("\n");
+        }
+
+        return content;
+    }
+
     private static async openMasterScript(
         masterUri: vscode.Uri,
     ): Promise<vscode.TextEditor> {
