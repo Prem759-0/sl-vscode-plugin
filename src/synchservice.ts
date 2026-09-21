@@ -763,6 +763,77 @@ export class SynchService implements vscode.Disposable {
         );
 
         const takenNamesByFolder = new Map<string, Set<string>>();
+        const itemsWithDest: {
+            primId: string;
+            item: ObjectInventoryItem;
+            isRoot: boolean;
+            primName: string;
+            linkNumber: number;
+            targetFolderUri: vscode.Uri;
+            targetFileUri: vscode.Uri;
+        }[] = [];
+
+        for (const itemInfo of items) {
+            const { primId, item, isRoot, primName, linkNumber } = itemInfo;
+            
+            let targetFolderUri = destinationRoot;
+            if (!isRoot) {
+                const childFolderName = sanitiseSegment(`${primName}_${linkNumber}`);
+                targetFolderUri = vscode.Uri.joinPath(destinationRoot, childFolderName);
+            }
+
+            const folderPath = targetFolderUri.toString();
+            if (!takenNamesByFolder.has(folderPath)) {
+                takenNamesByFolder.set(folderPath, new Set());
+            }
+            const takenNames = takenNamesByFolder.get(folderPath)!;
+
+            const rawItemName = item.name;
+            let itemNameSafe = sanitiseSegment(rawItemName);
+            const lang = languageForItem(item);
+            
+            if (lang && lang !== "txt") {
+                itemNameSafe = `${itemNameSafe}.${lang}`;
+            } else if (item.type === "notecard") { // Notecard
+                itemNameSafe = `${itemNameSafe}.txt`;
+            }
+
+            itemNameSafe = uniqueInDirectory(itemNameSafe, takenNames);
+            takenNames.add(itemNameSafe);
+
+            const targetFileUri = vscode.Uri.joinPath(targetFolderUri, itemNameSafe);
+            itemsWithDest.push({ ...itemInfo, targetFolderUri, targetFileUri });
+        }
+
+        let existingFilesCount = 0;
+        for (const { targetFileUri } of itemsWithDest) {
+            try {
+                if (await vscode.workspace.fs.stat(targetFileUri)) {
+                    existingFilesCount++;
+                }
+            } catch {
+                // does not exist
+            }
+        }
+
+        let overwriteBehavior: "overwrite" | "skip" = "skip";
+
+        if (existingFilesCount > 0) {
+            const choice = await vscode.window.showWarningMessage(
+                `${existingFilesCount} file(s) already exist in the destination folder. Do you want to overwrite them?`,
+                { modal: true },
+                "Overwrite All",
+                "Skip Existing"
+            );
+
+            if (choice === "Overwrite All") {
+                overwriteBehavior = "overwrite";
+            } else if (choice === "Skip Existing") {
+                overwriteBehavior = "skip";
+            } else {
+                return; // User cancelled
+            }
+        }
 
         await vscode.window.withProgress(
             {
@@ -771,50 +842,27 @@ export class SynchService implements vscode.Disposable {
                 cancellable: true,
             },
             async (progress, token) => {
-                for (let index = 0; index < items.length; index++) {
+                for (let index = 0; index < itemsWithDest.length; index++) {
                     if (token.isCancellationRequested) {
                         break;
                     }
 
-                    const { primId, item, isRoot, primName, linkNumber } = items[index];
+                    const { primId, item, isRoot, targetFolderUri, targetFileUri } = itemsWithDest[index];
+                    const lang = languageForItem(item);
                     progress.report({
-                        message: `${index + 1}/${items.length}: ${displayName(item)}`,
-                        increment: items.length > 0 ? 100 / items.length : 100,
+                        message: `${index + 1}/${itemsWithDest.length}: ${displayName(item)}`,
+                        increment: itemsWithDest.length > 0 ? 100 / itemsWithDest.length : 100,
                     });
 
-                    let targetFolderUri = destinationRoot;
                     if (!isRoot) {
-                        const childFolderName = sanitiseSegment(`${primName}_${linkNumber}`);
-                        targetFolderUri = vscode.Uri.joinPath(destinationRoot, childFolderName);
                         try {
                             await vscode.workspace.fs.createDirectory(targetFolderUri);
                         } catch (e) {
                             summary.failed++;
-                            logWarning(`[pullObjectToWorkspace] Failed to create child folder ${childFolderName}: ${e}`);
+                            logWarning(`[pullObjectToWorkspace] Failed to create child folder ${targetFolderUri.toString()}: ${e}`);
                             continue;
                         }
                     }
-
-                    const folderPath = targetFolderUri.toString();
-                    if (!takenNamesByFolder.has(folderPath)) {
-                        takenNamesByFolder.set(folderPath, new Set());
-                    }
-                    const takenNames = takenNamesByFolder.get(folderPath)!;
-
-                    const rawItemName = item.name;
-                    let itemNameSafe = sanitiseSegment(rawItemName);
-                    const lang = languageForItem(item);
-                    
-                    if (lang && lang !== "txt") {
-                        itemNameSafe = `${itemNameSafe}.${lang}`;
-                    } else if (item.type === "notecard") { // Notecard
-                        itemNameSafe = `${itemNameSafe}.txt`;
-                    }
-
-                    itemNameSafe = uniqueInDirectory(itemNameSafe, takenNames);
-                    takenNames.add(itemNameSafe);
-
-                    const targetFileUri = vscode.Uri.joinPath(targetFolderUri, itemNameSafe);
 
                     // Containment check (already guaranteed by joinPath generally, but we can verify it starts with destinationRoot)
                     if (!targetFileUri.toString().startsWith(destinationRoot.toString())) {
@@ -823,15 +871,16 @@ export class SynchService implements vscode.Disposable {
                         continue;
                     }
 
-                    try {
-                        const stat = await vscode.workspace.fs.stat(targetFileUri);
-                        if (stat) {
-                            // Safe mode: skip existing file
-                            summary.skippedExists++;
-                            continue;
+                    if (overwriteBehavior === "skip") {
+                        try {
+                            if (await vscode.workspace.fs.stat(targetFileUri)) {
+                                // Safe mode: skip existing file
+                                summary.skippedExists++;
+                                continue;
+                            }
+                        } catch {
+                            // File does not exist, safe to write
                         }
-                    } catch {
-                        // File does not exist, safe to write
                     }
 
                     const uri = itemUri(objectId, primId, item.item_id);
