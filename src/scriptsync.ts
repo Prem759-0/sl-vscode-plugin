@@ -20,10 +20,8 @@ import {
     closeTextDocument,
     errorLevelToSeverity,
     VSCodeHost,
-    logInfo,
     logRuntimeInfo,
-    logRuntimeError,
-    logError
+    logRuntimeError
 } from "./utils";
 import { ScriptLanguage } from "./shared/languageservice";
 import { CompilationResult, Diagnostic, RuntimeDebug, RuntimeError } from "./viewereditwsclient";
