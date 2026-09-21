@@ -1166,6 +1166,13 @@ function showObjectMenu(anchor: MenuAnchor, objectEl: HTMLElement): void {
                 payload: { object_id },
             }),
         },
+        {
+            label: "Pull to Workspace",
+            action: () => vscode.postMessage({
+                command: "pullObjectToWorkspace",
+                payload: { object_id },
+            }),
+        },
         { separator: true },
         {
             label: "Unexplore",

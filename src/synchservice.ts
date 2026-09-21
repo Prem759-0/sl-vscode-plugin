@@ -54,6 +54,7 @@ import { ScriptLanguage, LanguageService } from "./shared/languageservice";
 import { ScriptIdentity, ScriptSync } from "./scriptsync";
 import { getLanguageConfig } from "./shared/lexer";
 import { HostInterface } from "./interfaces/hostinterface";
+import { sanitiseSegment, uniqueInDirectory } from "./shared/pathsafety";
 import { SyncedFileDecorator } from "./vscode/SyncedFileDecorator";
 import { ObjectContentChangeEvent, ObjectContentService, ObjectTreeChangeEvent } from "./vscode/objectcontentservice";
 import { ObjectPinStore } from "./vscode/objectpinstore";
@@ -629,6 +630,173 @@ export class SynchService implements vscode.Disposable {
             `(no modify), ${summary.errors} errors, ${summary.mismatches} differing.`,
         );
         return summary;
+    }
+
+    public async pullObjectToWorkspace(objectId: string): Promise<void> {
+        if (!vscode.workspace.workspaceFolders || vscode.workspace.workspaceFolders.length === 0) {
+            vscode.window.showErrorMessage("No workspace open to pull the object into.");
+            return;
+        }
+
+        const entry = ObjectContentService.getInstance().getObject(objectId);
+        if (!entry) {
+            vscode.window.showErrorMessage("Object not found or not published.");
+            return;
+        }
+
+        const workspaceFolder = await vscode.window.showWorkspaceFolderPick({ 
+            placeHolder: "Select workspace folder for pull destination" 
+        });
+        if (!workspaceFolder) {
+            return;
+        }
+
+        const sanitizedObjectName = sanitiseSegment(entry.object.object_name || "Object");
+        const folderName = await vscode.window.showInputBox({
+            prompt: "Destination folder name",
+            value: sanitizedObjectName,
+            validateInput: (value) => {
+                if (value.trim().length === 0) return "Folder name cannot be empty.";
+                return null;
+            }
+        });
+
+        if (!folderName) {
+            return;
+        }
+
+        const destinationRoot = vscode.Uri.joinPath(workspaceFolder.uri, folderName);
+        
+        try {
+            await vscode.workspace.fs.createDirectory(destinationRoot);
+        } catch (e) {
+            vscode.window.showErrorMessage(`Could not create destination folder: ${e}`);
+            return;
+        }
+
+        const summary = {
+            written: 0,
+            skippedExists: 0,
+            failed: 0,
+        };
+
+        const items = [
+            {
+                primId: objectId,
+                items: entry.object.inventory ?? [],
+                isRoot: true,
+                primName: entry.object.object_name || "Object",
+                linkNumber: 0
+            },
+            ...(entry.object.linked_objects ?? []).map((linked) => ({
+                primId: linked.link_id,
+                items: linked.inventory ?? [],
+                isRoot: false,
+                primName: linked.link_name || "Object",
+                linkNumber: linked.link_number
+            })),
+        ].flatMap(({ primId, items: inventory, isRoot, primName, linkNumber }) =>
+            inventory.map((item) => ({ primId, item, isRoot, primName, linkNumber }))
+        );
+
+        const takenNamesByFolder = new Map<string, Set<string>>();
+
+        await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: `Pulling files from ${entry.object.object_name || "Object"}`,
+                cancellable: true,
+            },
+            async (progress, token) => {
+                for (let index = 0; index < items.length; index++) {
+                    if (token.isCancellationRequested) {
+                        break;
+                    }
+
+                    const { primId, item, isRoot, primName, linkNumber } = items[index];
+                    progress.report({
+                        message: `${index + 1}/${items.length}: ${displayName(item)}`,
+                        increment: items.length > 0 ? 100 / items.length : 100,
+                    });
+
+                    let targetFolderUri = destinationRoot;
+                    if (!isRoot) {
+                        const childFolderName = sanitiseSegment(`${primName}_${linkNumber}`);
+                        targetFolderUri = vscode.Uri.joinPath(destinationRoot, childFolderName);
+                        try {
+                            await vscode.workspace.fs.createDirectory(targetFolderUri);
+                        } catch (e) {
+                            summary.failed++;
+                            logWarning(`[pullObjectToWorkspace] Failed to create child folder ${childFolderName}: ${e}`);
+                            continue;
+                        }
+                    }
+
+                    const folderPath = targetFolderUri.toString();
+                    if (!takenNamesByFolder.has(folderPath)) {
+                        takenNamesByFolder.set(folderPath, new Set());
+                    }
+                    const takenNames = takenNamesByFolder.get(folderPath)!;
+
+                    const rawItemName = item.name;
+                    let itemNameSafe = sanitiseSegment(rawItemName);
+                    const lang = languageForItem(item);
+                    
+                    if (lang && lang !== "txt") {
+                        itemNameSafe = `${itemNameSafe}.${lang}`;
+                    } else if (item.type === "notecard") { // Notecard
+                        itemNameSafe = `${itemNameSafe}.txt`;
+                    }
+
+                    itemNameSafe = uniqueInDirectory(itemNameSafe, takenNames);
+                    takenNames.add(itemNameSafe);
+
+                    const targetFileUri = vscode.Uri.joinPath(targetFolderUri, itemNameSafe);
+
+                    // Containment check (already guaranteed by joinPath generally, but we can verify it starts with destinationRoot)
+                    if (!targetFileUri.toString().startsWith(destinationRoot.toString())) {
+                        summary.failed++;
+                        logWarning(`[pullObjectToWorkspace] Escaped path detected: ${targetFileUri.toString()}`);
+                        continue;
+                    }
+
+                    try {
+                        const stat = await vscode.workspace.fs.stat(targetFileUri);
+                        if (stat) {
+                            // Safe mode: skip existing file
+                            summary.skippedExists++;
+                            continue;
+                        }
+                    } catch {
+                        // File does not exist, safe to write
+                    }
+
+                    const uri = itemUri(objectId, primId, item.item_id);
+                    
+                    try {
+                        const contentBuffer = await vscode.workspace.fs.readFile(uri);
+                        const rawContent = Buffer.from(contentBuffer).toString("utf-8");
+                        
+                        const strippedContent = SynchService.stripEmittedMeta(rawContent, lang || "txt");
+                        const outBuffer = Buffer.from(strippedContent, "utf-8");
+                        
+                        await vscode.workspace.fs.writeFile(targetFileUri, outBuffer);
+                        summary.written++;
+                    } catch (error) {
+                        summary.failed++;
+                        logWarning(
+                            `[pullObjectToWorkspace] Failed to pull ${displayName(item)}: ` +
+                            `${error instanceof Error ? error.message : String(error)}`,
+                        );
+                    }
+                }
+            }
+        );
+
+        vscode.window.showInformationMessage(
+            `Pull complete for ${entry.object.object_name}: ` +
+            `${summary.written} written, ${summary.skippedExists} skipped (exists), ${summary.failed} errors.`
+        );
     }
 
     public removeSync(filePath: string): void {
