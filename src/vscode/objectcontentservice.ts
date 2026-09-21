@@ -44,6 +44,7 @@ export interface ScriptRunningChangeEvent {
     prim_id: string;
     item_id: string;
     running: boolean;
+    faulted?: boolean;
 }
 
 /** Fired when a script's VM assignment changes locally */
@@ -489,7 +490,10 @@ export class ObjectContentService implements vscode.Disposable {
                 const item = inventory.find((i) => i.item_id === rc.item_id);
                 if (item) {
                     item.running = rc.running;
-                    this._onDidChangeRunningState.fire({ object_id, prim_id, item_id: rc.item_id, running: rc.running });
+                    if (rc.faulted !== undefined) {
+                        item.faulted = rc.faulted;
+                    }
+                    this._onDidChangeRunningState.fire({ object_id, prim_id, item_id: rc.item_id, running: rc.running, faulted: rc.faulted });
                 }
             }
         }
