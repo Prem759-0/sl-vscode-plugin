@@ -983,9 +983,9 @@ function beginCreateItem(object_id: string, prim_id: string): void {
     input.addEventListener("input", () => {
         const val = input.value.toLowerCase();
         iconEl.className = "file-icon " + (
-            val.endsWith(".luau") ? "file-icon-script-luau" :
+            (val.endsWith(".luau") || val.endsWith(".slua") || val.endsWith(".lua")) ? "file-icon-script-luau" :
             val.endsWith(".lsl")  ? "file-icon-script-lsl" :
-                                    "file-icon-script-lsl"
+                                    "file-icon-notecard"
         );
     });
 

@@ -402,6 +402,10 @@ export class ObjectExplorerWebviewProvider implements vscode.WebviewViewProvider
                 let name: string;
                 if (lower.endsWith(".luau")) {
                     type = "script"; vm = "luau"; name = trimmed.slice(0, -5);
+                } else if (lower.endsWith(".slua")) {
+                    type = "script"; vm = "luau"; name = trimmed.slice(0, -5);
+                } else if (lower.endsWith(".lua")) {
+                    type = "script"; vm = "luau"; name = trimmed.slice(0, -4);
                 } else if (lower.endsWith(".lsl")) {
                     type = "script"; vm = "lsl2"; name = trimmed.slice(0, -4);
                 } else {
