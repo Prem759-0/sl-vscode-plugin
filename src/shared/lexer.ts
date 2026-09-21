@@ -612,6 +612,14 @@ export class Lexer {
         return /\d/.test(char);
     }
 
+    private isHexDigit(char: string): boolean {
+        return /[0-9a-fA-F]/.test(char);
+    }
+
+    private isBinaryDigit(char: string): boolean {
+        return char === '0' || char === '1';
+    }
+
     private isIdentifierStart(char: string): boolean {
         return /[a-zA-Z_]/.test(char);
     }
@@ -1173,6 +1181,31 @@ export class Lexer {
     private readNumber(): Token {
         const startLine = this.context.lineNumber;
         const startColumn = this.context.columnNumber;
+
+        // Hex (0x...) and binary (0b...) literals: one token, no exponent/suffix handling.
+        // Only taken when a valid digit follows the prefix, so a bare "0x" keeps its old behaviour.
+        if (this.peek() === '0') {
+            const prefix = this.peekAhead(1);
+            const isHex = (prefix === 'x' || prefix === 'X') && this.isHexDigit(this.peekAhead(2));
+            const isBinary = (prefix === 'b' || prefix === 'B') && this.isBinaryDigit(this.peekAhead(2));
+            if (isHex || isBinary) {
+                let literal = this.advance() + this.advance(); // "0x" / "0b"
+                const isValidDigit = isHex
+                    ? (ch: string) => this.isHexDigit(ch)
+                    : (ch: string) => this.isBinaryDigit(ch);
+                while (!this.isAtEnd() && isValidDigit(this.peek())) {
+                    literal += this.advance();
+                }
+                return new Token(
+                    TokenType.NUMBER_LITERAL,
+                    literal,
+                    startLine,
+                    startColumn,
+                    literal.length
+                );
+            }
+        }
+
         let value = "";
         let hasDigits = false;
 

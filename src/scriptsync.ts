@@ -23,7 +23,10 @@ import {
     logInfo,
     logRuntimeInfo,
     logRuntimeError,
-    logError
+    logError,
+    logWarning,
+    showErrorMessage,
+    showOutputChannel
 } from "./utils";
 import { ScriptLanguage } from "./shared/languageservice";
 import { CompilationResult, Diagnostic, RuntimeDebug, RuntimeError } from "./viewereditwsclient";
@@ -654,16 +657,55 @@ export class ScriptSync implements vscode.Disposable {
                 // Preprocessing failed, use original content and show error
                 finalContent = originalContent;
 
-                vscode.window.showErrorMessage("Preprocessing failed");
+                this.reportPreprocessorFailure(baseName, preprocessorResult);
             }
         } catch (error) {
             // Fallback to original content on any unexpected errors
             finalContent = originalContent;
             const errorMessage = `Preprocessing error for ${baseName}: ${error instanceof Error ? error.message : String(error)}`;
-            console.error(errorMessage);
+            logError(errorMessage, error instanceof Error ? error : undefined);
             vscode.window.showErrorMessage(errorMessage);
         }
         return finalContent;
+    }
+
+    /**
+     * Report a failed preprocess: log every issue to the plugin log and show
+     * a toast naming the first error, with shortcuts to the Problems panel and log.
+     */
+    private reportPreprocessorFailure(baseName: string, result: PreprocessorResult): void {
+        for (const issue of result.issues) {
+            const where = `${issue.file ?? baseName}:${issue.lineNumber}` +
+                (issue.columnNumber ? `:${issue.columnNumber}` : "");
+            const text = `${where} ${issue.message}`;
+            if (issue.isWarning) {
+                logWarning(text);
+            } else {
+                logError(text);
+            }
+        }
+
+        const errors = result.issues.filter(i => !i.isWarning);
+        const first = errors[0];
+        let summary = `Preprocessing failed for ${baseName}`;
+        if (first) {
+            const file = first.file
+                ? path.basename(this.diagnosticSourceToVscodeUri(first.file).fsPath)
+                : baseName;
+            summary += `: ${first.message} (${file}:${first.lineNumber})`;
+            if (errors.length > 1) {
+                summary += ` (+${errors.length - 1} more)`;
+            }
+        }
+
+        // Don't await: a toast must not block the sync path
+        void showErrorMessage(summary, "Show Problems", "Show Log").then(choice => {
+            if (choice === "Show Problems") {
+                void vscode.commands.executeCommand("workbench.actions.view.problems");
+            } else if (choice === "Show Log") {
+                showOutputChannel();
+            }
+        });
     }
 
     private getLanguageConfig(): LanguageLexerConfig {
