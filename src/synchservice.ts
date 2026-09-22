@@ -911,7 +911,6 @@ export class SynchService implements vscode.Disposable {
             const createItems = Array.from(pushItems.values()).filter(i => !i.existingItem);
             
             const total = updateItems.length + createItems.length;
-            let current = 0;
 
             const processItem = async (item: typeof updateItems[0], isCreate: boolean) => {
                 if (token.isCancellationRequested) return false;
@@ -949,7 +948,7 @@ export class SynchService implements vscode.Disposable {
                         primId: primId === target.object_id ? null : primId,
                         itemId: itemIdToSave
                     };
-                    const lang = languageForItem({ type: item.type, vm: item.vm } as any);
+                    const lang: ScriptLanguage = item.vm === "luau" ? "luau" : item.type === "notecard" ? "txt" : "lsl";
                     const slUri = itemUri(target.object_id, primId, itemIdToSave);
                     
                     await this.moveVirtualFile(
