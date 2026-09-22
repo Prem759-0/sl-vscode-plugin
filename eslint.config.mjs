@@ -77,13 +77,13 @@ export default [
     },
   },
   {
-    files: ['packages/sl-ide-ws-client/src/**/*.ts'],
+    files: ['packages/*/src/**/*.ts'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
-        project: './packages/sl-ide-ws-client/tsconfig.json',
+        project: ['./packages/sl-ide-ws-client/tsconfig.json', './packages/sl-script-preprocessor/tsconfig.json'],
       },
       globals: {
         console: 'readonly',
