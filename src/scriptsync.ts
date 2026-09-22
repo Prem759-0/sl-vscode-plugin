@@ -26,7 +26,7 @@ import {
     RuntimeDebug,
     RuntimeError,
 } from "#sl-ide-ws-client";
-import { stringUriToVscodeUri, vscodeUriToStringUri, createFileWatcher, closeTextDocument, showStatusMessage, errorLevelToSeverity, logRuntimeInfo, logRuntimeError, VSCodeHost, logError, logWarning, showErrorMessage, showOutputChannel } from "./utils";
+import { stringUriToVscodeUri, vscodeUriToStringUri, createFileWatcher, closeTextDocument, showStatusMessage, errorLevelToSeverity, logRuntimeInfo, logRuntimeError, VSCodeHost, logError, logWarning, showErrorMessage, showOutputChannel, pluginLogSink } from "./utils";
 import { SynchService } from "./synchservice";
 import { sha256 } from "js-sha256";
 
@@ -81,12 +81,7 @@ export function buildPreprocessorConfig(language: ScriptLanguage, config: FullCo
             maxDepth: config.getConfig<number>(ConfigKey.PreprocessorMaxIncludeDepth, 5),
             paths: config.getConfig<string[]>(ConfigKey.PreprocessorIncludePaths, ["."]),
         },
-        logger: {
-            debug: (message: string) => console.debug(message),
-            info: (message: string) => console.info(message),
-            warn: (message: string) => console.warn(message),
-            error: (message: string, error?: unknown) => console.error(message, error),
-        },
+        logger: pluginLogSink,
     };
 }
 

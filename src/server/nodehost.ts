@@ -14,6 +14,7 @@ import * as yaml from 'js-yaml';
 import * as toml from '@iarna/toml';
 
 interface Logger {
+    trace: (...a: any[]) => void;
     debug: (...a: any[]) => void;
     info: (...a: any[]) => void;
     warn: (...a: any[]) => void;
@@ -45,6 +46,7 @@ export class NodeHost implements HostInterface {
         this.fs = opts.fsModule || fs;
         const noOp = (): void => {};
         this.log = {
+            trace: opts.logger?.trace || noOp,
             debug: opts.logger?.debug || noOp,
             info: opts.logger?.info || noOp,
             warn: opts.logger?.warn || noOp,

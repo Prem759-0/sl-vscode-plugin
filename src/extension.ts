@@ -20,7 +20,8 @@ import {
     logDebug,
     showStatusMessage,
     hasWorkspace,
-    showErrorMessage
+    showErrorMessage,
+    initializeLogging
 } from "./utils";
 import { ConfigKey } from "./interfaces/configinterface";
 import path from "path";
@@ -71,6 +72,7 @@ async function renameNode(
 // Your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext): void {
     const configService = ConfigService.getInstance(context);
+    initializeLogging(configService);
     const host = new VSCodeHost(context);
     // Initialize shared LSP services with injected host
     const languageService = LanguageService.getInstance(host);
