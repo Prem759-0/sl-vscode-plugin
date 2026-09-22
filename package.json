@@ -418,7 +418,7 @@
               "Failures and recoverable problems.",
               "Normal activity: connections, publishes, syncs.",
               "Developer detail: preprocessing, resolved paths, state transitions.",
-              "Everything, including raw protocol traffic. Very noisy."
+              "Everything, including raw JSON-RPC message bodies and preprocessor directive/macro-expansion tracing. Very noisy."
             ],
             "default": "INFO",
             "description": "Minimum severity written to the Second Life Plugin Log output channel. Does not affect the Second Life runtime channel."
@@ -444,7 +444,7 @@
     "lint": "eslint src packages",
     "lint:fix": "eslint src packages --fix",
     "test": "node ./out/test/runTest.js",
-    "test-unit": "npx mocha \"./out/test/suite/parser.test.js\" \"./out/test/suite/lexingpreprocessor.test.js\" \"./out/test/suite/include-disk-integration.test.js\" \"./out/test/suite/logger.test.js\" --ui tdd --timeout 5000",
+    "test-unit": "npx mocha \"./out/test/suite/parser.test.js\" \"./out/test/suite/lexingpreprocessor.test.js\" \"./out/test/suite/include-disk-integration.test.js\" \"./out/test/suite/logger.test.js\" \"./out/test/suite/preprocessor-trace.test.js\" --ui tdd --timeout 5000",
     "test-compile": "npm run compile:packages && tsc -p . --outDir out --skipLibCheck && npm run copy-test-data",
     "precommit": "npm run lint && npm run test-compile && npm run test-unit"
   },

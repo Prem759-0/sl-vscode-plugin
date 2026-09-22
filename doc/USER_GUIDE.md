@@ -126,7 +126,7 @@ settings use the `slVscodeEdit.` prefix.
 
 | Setting | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `slVscodeEdit.logging.level` | String (`ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`) | `INFO` | Sets the minimum severity written to the Second Life Plugin Log output channel. Does not affect the Second Life runtime channel. |
+| `slVscodeEdit.logging.level` | String (`ERROR`, `WARN`, `INFO`, `DEBUG`, `TRACE`) | `INFO` | Sets the minimum severity written to the Second Life Plugin Log output channel. `TRACE` additionally includes full JSON-RPC message bodies and preprocessor directive/macro-expansion tracing. Does not affect the Second Life runtime channel. |
 
 ## Starting WebSocket Sync
 
