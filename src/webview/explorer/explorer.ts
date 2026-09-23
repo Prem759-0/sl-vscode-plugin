@@ -30,7 +30,7 @@ interface InventoryItem {
     vm?: string;
     running?: boolean;
     faulted?: boolean;
-    permissions?: { owner: number; next_owner: number };
+    permissions?: { owner: number; next_owner?: number };
 }
 
 interface LinkedObject {

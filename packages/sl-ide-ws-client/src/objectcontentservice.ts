@@ -135,6 +135,22 @@ export class ObjectContentService implements Disposable {
         if (msg.object_name !== undefined) {
             entry.object.object_name = msg.object_name;
         }
+        if (msg.object_description !== undefined)
+        {
+            entry.object.object_description = msg.object_description;
+        }
+        if (msg.owner_id !== undefined)
+        {
+            entry.object.owner_id = msg.owner_id;
+        }
+        if (msg.permissions !== undefined)
+        {
+            entry.object.permissions = msg.permissions;
+        }
+        if (msg.can_save_back !== undefined)
+        {
+            entry.object.can_save_back = msg.can_save_back;
+        }
 
         let added_link_ids: string[] | undefined;
         let removed_link_ids: string[] | undefined;
@@ -177,6 +193,14 @@ export class ObjectContentService implements Disposable {
                         if (!lo) continue;
                         if (mod.link_name !== undefined) {
                             lo.link_name = mod.link_name;
+                        }
+                        if (mod.link_description !== undefined)
+                        {
+                            lo.link_description = mod.link_description;
+                        }
+                        if (mod.permissions !== undefined)
+                        {
+                            lo.permissions = mod.permissions;
                         }
                         if (mod.inventory) {
                             // The viewer may send either a full inventory array or delta changes.

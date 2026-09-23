@@ -70,7 +70,7 @@ export interface LinkedObject {
  */
 export interface ObjectPermissions {
     owner: number;
-    next_owner: number;
+    next_owner?: number;       // Absent until the viewer receives ObjectProperties
 }
 
 /**
@@ -130,6 +130,7 @@ export interface LinkedObjectChanges {
         link_id: string;
         link_name?: string;
         link_description?: string;
+        permissions?: ObjectPermissions;
         // Can be either full replacement (array) or delta changes (object)
         inventory?: InventoryChanges | ObjectInventoryItem[];
     }[];
@@ -144,6 +145,9 @@ export interface ObjectUpdateMessage {
     object_id: string;
     object_name?: string;
     object_description?: string;
+    owner_id?: string;
+    permissions?: ObjectPermissions;
+    can_save_back?: boolean;
     // Full replacement
     inventory?: ObjectInventoryItem[];
     linked_objects?: LinkedObject[];
