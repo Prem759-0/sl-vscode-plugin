@@ -40,6 +40,7 @@ import {
     closeTextDocument,
     vscodeUriToStringUri,
     resolveProtonPath,
+    pluginLogSink,
 } from "./utils";
 import { maybe } from "./shared/sharedutils"; // TODO: migrate needed utilities from sharedutils if required
 import { CommandRegistry } from "./commandregistry";
@@ -816,11 +817,7 @@ export class SynchService implements vscode.Disposable {
                 name: packageJson.name ?? "sl-vscode-plugin",
                 version: packageJson.version ?? "0.0.0",
             },
-            logger: {
-                debug: logDebug,
-                info: logInfo,
-                warn: logWarning,
-            },
+            logger: pluginLogSink,
             notify: (message, kind): void => {
                 if (kind === "status") {
                     showStatusMessage(message);

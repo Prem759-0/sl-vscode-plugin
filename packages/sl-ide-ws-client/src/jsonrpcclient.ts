@@ -128,34 +128,40 @@ export class JSONRPCClient extends WebsockClient implements JSONRPCInterface {
     private logIncomingMessage(message: JSONRPCMessage): void {
         if (this.isJSONRPCRequest(message)) {
             this.logger?.debug?.(`[JSON-RPC] <- request method=${message.method} id=${String(message.id)}`);
+            this.logger?.trace?.(() => `[JSON-RPC] <- request body: ${JSON.stringify(message)}`);
             return;
         }
 
         if (this.isJSONRPCNotification(message)) {
             this.logger?.debug?.(`[JSON-RPC] <- notification method=${message.method}`);
+            this.logger?.trace?.(() => `[JSON-RPC] <- notification body: ${JSON.stringify(message)}`);
             return;
         }
 
         if (this.isJSONRPCResponse(message)) {
             const status = message.error ? "error" : "result";
             this.logger?.debug?.(`[JSON-RPC] <- response id=${String(message.id)} status=${status}`);
+            this.logger?.trace?.(() => `[JSON-RPC] <- response body: ${JSON.stringify(message)}`);
         }
     }
 
     private logOutgoingMessage(message: JSONRPCMessage): void {
         if (this.isJSONRPCRequest(message)) {
             this.logger?.debug?.(`[JSON-RPC] -> request method=${message.method} id=${String(message.id)}`);
+            this.logger?.trace?.(() => `[JSON-RPC] -> request body: ${JSON.stringify(message)}`);
             return;
         }
 
         if (this.isJSONRPCNotification(message)) {
             this.logger?.debug?.(`[JSON-RPC] -> notification method=${message.method}`);
+            this.logger?.trace?.(() => `[JSON-RPC] -> notification body: ${JSON.stringify(message)}`);
             return;
         }
 
         if (this.isJSONRPCResponse(message)) {
             const status = message.error ? "error" : "result";
             this.logger?.debug?.(`[JSON-RPC] -> response id=${String(message.id)} status=${status}`);
+            this.logger?.trace?.(() => `[JSON-RPC] -> response body: ${JSON.stringify(message)}`);
         }
     }
 

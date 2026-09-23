@@ -197,6 +197,20 @@ Customize viewer connection:
 }
 ```
 
+### Logging Settings
+
+Control how much detail reaches the `Second Life Plugin Log` output channel:
+
+```json
+{
+    "slVscodeEdit.logging.level": "INFO"
+}
+```
+
+Allowed values, from most to least severe: `ERROR`, `WARN`, `INFO` (default), `DEBUG`,
+`TRACE`. `TRACE` includes full JSON-RPC message bodies plus preprocessor directive
+and macro-expansion tracing, and is very noisy.
+
 ### Storage Settings
 
 Control where configuration files are stored:

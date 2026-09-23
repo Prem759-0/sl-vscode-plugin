@@ -33,10 +33,11 @@ export interface OptionFlags {
 }
 
 export interface PreprocessorLogger {
-    debug?(message: string): void;
-    info?(message: string): void;
-    warn?(message: string): void;
-    error?(message: string, error?: unknown): void;
+    trace?(message: string | (() => string)): void;
+    debug?(message: string | (() => string)): void;
+    info?(message: string | (() => string)): void;
+    warn?(message: string | (() => string)): void;
+    error?(message: string | (() => string), error?: unknown): void;
 }
 
 
