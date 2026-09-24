@@ -2,7 +2,7 @@
   "name": "sl-vscode-plugin",
   "displayName": "Second Life VSCode Plugin",
   "description": "Binding extension for external LSL and SLua editing from the Second Life viewer.",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "publisher": "lindenlab",
   "icon": "sl-logo-vscode.png",
   "extensionDependencies": [],
@@ -412,7 +412,13 @@
         "properties": {
           "slVscodeEdit.logging.level": {
             "type": "string",
-            "enum": ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"],
+            "enum": [
+              "ERROR",
+              "WARN",
+              "INFO",
+              "DEBUG",
+              "TRACE"
+            ],
             "enumDescriptions": [
               "Only failures.",
               "Failures and recoverable problems.",
